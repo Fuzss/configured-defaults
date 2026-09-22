@@ -2,10 +2,7 @@ package fuzs.configureddefaults.common.handler;
 
 import fuzs.configureddefaults.common.ConfiguredDefaults;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,20 +11,7 @@ import java.util.*;
 public class CopyDefaultsHandler {
     public static final String DEFAULTS_DIRECTORY = ConfiguredDefaults.MOD_ID;
     public static final String README_FILE = "README.md";
-    private static final String README_CONTENTS = """
-                                                  # %1$s
-                                                  
-                                                  This whole directory servers as a synchronized mirror of `.minecraft`. Every sub-directory and / or file placed within will be copied to the main `.minecraft` directory during game launch if the directory / file is not already present.
-                                                  There is no way of overriding an existing file, a copy will only be made when the target destination is empty.
-                                                  
-                                                  Please note that due to the way Minecraft handles `options.txt` specifically it is sufficient to include only the options you want to set a preset for. All missing options will be filled in using their internal defaults when the file is read by the game.
-                                                  
-                                                  Examples:
-                                                  - `.minecraft/%2$s/options.txt` will be copied to `.minecraft/options.txt` if not already present
-                                                  - `.minecraft/%2$s/config/jei/jei.toml` will be copied to `.minecraft/config/jei/jei.toml` if not already present
-                                                  
-                                                  Note that this `README.md` file is excluded from being copied to `.minecraft`.
-                                                  """.formatted(ConfiguredDefaults.MOD_NAME, DEFAULTS_DIRECTORY);
+    private static final String README_RESOURCE = "/" + README_FILE;
     private static final String OPTIONS_FILE = "options.txt";
 
     private static boolean initialized;
@@ -66,7 +50,14 @@ public class CopyDefaultsHandler {
         }
         Path readmePath = defaultPresetsPath.resolve(README_FILE);
         if (Files.notExists(readmePath)) {
-            Files.write(readmePath, README_CONTENTS.getBytes());
+            try (InputStream inputStream = CopyDefaultsHandler.class.getResourceAsStream(README_RESOURCE)) {
+                if (inputStream == null) {
+                    throw new IOException("Missing '%s' resource".formatted(README_RESOURCE));
+                }
+
+                Files.copy(inputStream, readmePath);
+            }
+
             ConfiguredDefaults.LOGGER.info("Created fresh '{}' file",
                     relativizeAndNormalize(gameParentPath, readmePath));
         }
@@ -122,8 +113,8 @@ public class CopyDefaultsHandler {
         int size = options.size();
         // compare size as we only allow adding new options via Map::putIfAbsent,
         // so only if the size value changes we must rewrite the file
-        if (loadOptions(path.resolve(DEFAULTS_DIRECTORY).resolve(OPTIONS_FILE), options, true) &&
-                options.size() != size) {
+        if (loadOptions(path.resolve(DEFAULTS_DIRECTORY).resolve(OPTIONS_FILE), options, true)
+                && options.size() != size) {
             saveOptions(optionsPath, options);
         }
     }
